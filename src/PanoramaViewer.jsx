@@ -34,7 +34,7 @@ const PanoramaViewer = () => {
       0.1,
       1000
     );
-    camera.position.set(0.1, 0, 0);
+    camera.position.set(0.1, 0, 10);
     cameraRef.current = camera;
 
     const renderer = new THREE.WebGLRenderer({ antialias: true });
