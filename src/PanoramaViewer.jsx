@@ -55,7 +55,9 @@ const PanoramaViewer = () => {
     geometry.scale(-1, 1, 1);
 
     // const texture = new THREE.TextureLoader().load('/shot-panoramic-composition-library (1).jpg');
-    const texture = new THREE.TextureLoader().load('/53400175859_7a5bf9d9f0_o.jpg');
+    // const texture = new THREE.TextureLoader().load('/53400175859_7a5bf9d9f0_o.jpg');
+    const texture = new THREE.TextureLoader().load('/54457658213_e8d620a169_o.jpg');
+    
   
     // const texture = new THREE.TextureLoader().load('/2294472375_24a3b8ef46_3.jpg');
 
