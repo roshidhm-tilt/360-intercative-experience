@@ -32,21 +32,21 @@ const PanoramaViewer = () => {
   const hotspotRefs = useRef([]);
 
   const createTooltipTexture = (text) => {
-  const canvas = document.createElement('canvas');
-  const ctx = canvas.getContext('2d');
-  ctx.font = '24px Arial';
-  const width = ctx.measureText(text).width + 20;
-  const height = 40;
-
-  canvas.width = width;
-  canvas.height = height;
-  ctx.fillStyle = 'rgba(0, 0, 0, 0.8)';
-  ctx.fillRect(0, 0, width, height);
-  ctx.fillStyle = '#ffffff';
-  ctx.fillText(text, 10, height / 1.5);
-
-  return new THREE.CanvasTexture(canvas);
-};
+    const canvas = document.createElement('canvas');
+    const ctx = canvas.getContext('2d');
+    ctx.font = '24px Arial';
+    const width = ctx.measureText(text).width + 2;
+    const height = 40;
+  
+    // canvas.width = width;
+    // canvas.height = height;
+    ctx.fillStyle = 'rgba(0, 0, 0, 0.8)';
+    ctx.fillRect(0, 0, 200, 40);
+    ctx.fillStyle = '#ffffff';
+    ctx.fillText(text, 40, height / 1.5);
+  
+    return new THREE.CanvasTexture(canvas);
+  };
 
   const createHotspotTexture = () => {
     const size = 128;
@@ -90,14 +90,23 @@ const PanoramaViewer = () => {
 
     if (intersects.length > 0) {
       const hotspot = intersects[0].object;
-      const screenPos = toScreenPosition(hotspot, cameraRef.current, rendererRef.current);
-      tooltip.innerText = hotspot.userData.label;
-      tooltip.style.left = `${screenPos.x}px`;
-      tooltip.style.top = `${screenPos.y}px`;
-      tooltip.style.display = 'block';
-    } else {
-      tooltip.style.display = 'none';
-    }
+      const label = hotspot.userData.label;
+
+    // Create and add 3D Tooltip Sprite
+    const texture = createTooltipTexture(label);
+    const spriteMaterial = new THREE.SpriteMaterial({ map: texture, transparent: true });
+    const tooltipSprite = new THREE.Sprite(spriteMaterial);
+    tooltipSprite.scale.set(50, 50, 1);
+    
+    // Position the tooltip at the hotspot's position
+    tooltipSprite.position.copy(hotspot.position);
+    sceneRef.current?.add(tooltipSprite);
+
+    // Optionally remove tooltip after 3 seconds
+    setTimeout(() => {
+      sceneRef.current?.remove(tooltipSprite);
+    }, 3000);
+  }
   };
 
   useEffect(() => {
