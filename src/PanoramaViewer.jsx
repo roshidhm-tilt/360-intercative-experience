@@ -1,5 +1,17 @@
 import { useEffect, useRef } from 'react';
 import * as THREE from 'three';
+import "./App.css"
+
+const toScreenPosition = (obj, camera, renderer) => {
+  const vector = obj.position.clone().project(camera);
+  const widthHalf = 0.5 * renderer.domElement.clientWidth;
+  const heightHalf = 0.5 * renderer.domElement.clientHeight;
+
+  return {
+    x: (vector.x * widthHalf) + widthHalf,
+    y: -(vector.y * heightHalf) + heightHalf
+  };
+};
 
 const PanoramaViewer = () => {
   const containerRef = useRef(null);
@@ -14,59 +26,95 @@ const PanoramaViewer = () => {
   const theta = useRef(0);
   const cameraRef = useRef();
   const rendererRef = useRef();
-  const mouse = useRef()
+  const raycaster = useRef(new THREE.Raycaster());
+  const mouse = useRef({ x: 0, y: 0 });
+  const sceneRef = useRef();
+  const hotspotRefs = useRef([]);
 
-    // 👇 Call this to add a hotspot
-    const addHotspot = (position, label) => {
-      const spriteMap = new THREE.TextureLoader().load('/hotspot.png'); // Use your own icon here
-      const spriteMaterial = new THREE.SpriteMaterial({ map: spriteMap, sizeAttenuation: false });
-      const sprite = new THREE.Sprite(spriteMaterial);
-      sprite.position.copy(position);
-      sprite.scale.set(20, 20, 1); // Adjust size
-      sprite.userData.label = label;
+  const createTooltipTexture = (text) => {
+  const canvas = document.createElement('canvas');
+  const ctx = canvas.getContext('2d');
+  ctx.font = '24px Arial';
+  const width = ctx.measureText(text).width + 20;
+  const height = 40;
+
+  canvas.width = width;
+  canvas.height = height;
+  ctx.fillStyle = 'rgba(0, 0, 0, 0.8)';
+  ctx.fillRect(0, 0, width, height);
+  ctx.fillStyle = '#ffffff';
+  ctx.fillText(text, 10, height / 1.5);
+
+  return new THREE.CanvasTexture(canvas);
+};
+
+  const createHotspotTexture = () => {
+    const size = 128;
+    const canvas = document.createElement('canvas');
+    canvas.width = canvas.height = size;
+    const ctx = canvas.getContext('2d');
   
-      sceneRef.current?.add(sprite);
-      hotspotRefs.current.push(sprite);
-    };
+    ctx.beginPath();
+    ctx.arc(size / 2, size / 2, size / 4, 0, Math.PI * 2);
+    ctx.fillStyle = 'rgba(255, 0, 0, 0.9)';
+    ctx.fill();
   
-    const onClick = (event) => {
-      const bounds = rendererRef.current?.domElement.getBoundingClientRect();
-      if (!bounds) return;
-  
-      mouse.current.x = ((event.clientX - bounds.left) / bounds.width) * 2 - 1;
-      mouse.current.y = -((event.clientY - bounds.top) / bounds.height) * 2 + 1;
-  
-      raycaster.current.setFromCamera(mouse.current, !cameraRef.current);
-      const intersects = raycaster.current.intersectObjects(hotspotRefs.current);
-  
-      if (intersects.length > 0) {
-        const hotspot = intersects[0].object;
-        alert(`Hotspot clicked: ${hotspot.userData.label}`);
-      }
-    };
+    return new THREE.CanvasTexture(canvas);
+  };
+
+  const addHotspot = (position, label) => {
+    const texture = createHotspotTexture();
+    const spriteMaterial = new THREE.SpriteMaterial({ map: texture, transparent: true });
+    const sprite = new THREE.Sprite(spriteMaterial);
+    const baseScale = 8;
+    sprite.scale.set(baseScale, baseScale, 1);
+    sprite.position.copy(position);
+    sprite.userData.label = label;
+    // sprite.userData.texture = texture;
+    sprite.userData.baseScale = baseScale;
+    sceneRef.current?.add(sprite);
+    hotspotRefs.current.push(sprite);
+  };
+
+  const onClick = (event) => {
+    const bounds = rendererRef.current?.domElement.getBoundingClientRect();
+    if (!bounds) return;
+
+    mouse.current.x = ((event.clientX - bounds.left) / bounds.width) * 2 - 1;
+    mouse.current.y = -((event.clientY - bounds.top) / bounds.height) * 2 + 1;
+
+    raycaster.current.setFromCamera(mouse.current, cameraRef.current);
+    const intersects = raycaster.current.intersectObjects(hotspotRefs.current);
+
+    const tooltip = document.getElementById('tooltip');
+
+    if (intersects.length > 0) {
+      const hotspot = intersects[0].object;
+      const screenPos = toScreenPosition(hotspot, cameraRef.current, rendererRef.current);
+      tooltip.innerText = hotspot.userData.label;
+      tooltip.style.left = `${screenPos.x}px`;
+      tooltip.style.top = `${screenPos.y}px`;
+      tooltip.style.display = 'block';
+    } else {
+      tooltip.style.display = 'none';
+    }
+  };
 
   useEffect(() => {
     const container = containerRef.current;
     const scene = new THREE.Scene();
+    sceneRef.current = scene;
+
     const camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 1, 1100);
     cameraRef.current = camera;
 
     const geometry = new THREE.SphereGeometry(500, 60, 40);
     geometry.scale(-1, 1, 1);
 
-    // const texture = new THREE.TextureLoader().load('/shot-panoramic-composition-library (1).jpg');
-    // const texture = new THREE.TextureLoader().load('/53400175859_7a5bf9d9f0_o.jpg');
     const texture = new THREE.TextureLoader().load('/54457658213_e8d620a169_o.jpg');
-    
-  
-    // const texture = new THREE.TextureLoader().load('/2294472375_24a3b8ef46_3.jpg');
-
     texture.colorSpace = THREE.SRGBColorSpace;
-    texture.wrapS = THREE.RepeatWrapping;
-texture.wrapT = THREE.ClampToEdgeWrapping;
-
-
     const material = new THREE.MeshBasicMaterial({ map: texture });
+
     const mesh = new THREE.Mesh(geometry, material);
     scene.add(mesh);
 
@@ -76,6 +124,12 @@ texture.wrapT = THREE.ClampToEdgeWrapping;
     container.appendChild(renderer.domElement);
     rendererRef.current = renderer;
 
+    // 🔥 Add multiple hotspots
+    addHotspot(new THREE.Vector3(100, 0, 0), 'Hotspot A');
+    addHotspot(new THREE.Vector3(-100, 50, 100), 'Hotspot B');
+    addHotspot(new THREE.Vector3(0, 50, -100), 'Hotspot C');
+    addHotspot(new THREE.Vector3(150, 20, -50), 'Hotspot D');
+
     const onPointerDown = (event) => {
       if (!event.isPrimary) return;
       isUserInteracting.current = true;
@@ -83,7 +137,6 @@ texture.wrapT = THREE.ClampToEdgeWrapping;
       onPointerDownMouseY.current = event.clientY;
       onPointerDownLon.current = lon.current;
       onPointerDownLat.current = lat.current;
-
       document.addEventListener('pointermove', onPointerMove);
       document.addEventListener('pointerup', onPointerUp);
     };
@@ -94,8 +147,7 @@ texture.wrapT = THREE.ClampToEdgeWrapping;
       lat.current = (event.clientY - onPointerDownMouseY.current) * 0.1 + onPointerDownLat.current;
     };
 
-    const onPointerUp = (event) => {
-      if (!event.isPrimary) return;
+    const onPointerUp = () => {
       isUserInteracting.current = false;
       document.removeEventListener('pointermove', onPointerMove);
       document.removeEventListener('pointerup', onPointerUp);
@@ -113,12 +165,9 @@ texture.wrapT = THREE.ClampToEdgeWrapping;
       renderer.setSize(window.innerWidth, window.innerHeight);
     };
 
+    let time = 0;
     const animate = () => {
       requestAnimationFrame(animate);
-
-      // if (!isUserInteracting.current) {
-      //   lon.current += 0.1;
-      // }
 
       lat.current = Math.max(-85, Math.min(85, lat.current));
       phi.current = THREE.MathUtils.degToRad(90 - lat.current);
@@ -127,13 +176,21 @@ texture.wrapT = THREE.ClampToEdgeWrapping;
       const x = 500 * Math.sin(phi.current) * Math.cos(theta.current);
       const y = 500 * Math.cos(phi.current);
       const z = 500 * Math.sin(phi.current) * Math.sin(theta.current);
-
       camera.lookAt(x, y, z);
+
+      // Animate hotspot pulse
+      time += 0.05;
+      hotspotRefs.current.forEach((sprite) => {
+        const scale = sprite.userData.baseScale + Math.sin(time * 2) * 2;
+        sprite.scale.set(scale, scale, 1);
+      });
+
       renderer.render(scene, camera);
     };
 
     container.style.touchAction = 'none';
     container.addEventListener('pointerdown', onPointerDown);
+    container.addEventListener('click', onClick);
     document.addEventListener('wheel', onMouseWheel);
     window.addEventListener('resize', onResize);
 
@@ -141,6 +198,7 @@ texture.wrapT = THREE.ClampToEdgeWrapping;
 
     return () => {
       container.removeEventListener('pointerdown', onPointerDown);
+      container.removeEventListener('click', onClick);
       document.removeEventListener('wheel', onMouseWheel);
       window.removeEventListener('resize', onResize);
       renderer.dispose();
@@ -148,7 +206,22 @@ texture.wrapT = THREE.ClampToEdgeWrapping;
     };
   }, []);
 
-  return <div ref={containerRef} style={{ width: '100vw', height: '100vh' }} />
+  return (
+    <>
+      <div ref={containerRef} style={{ width: '100vw', height: '100vh', position: 'relative' }} />
+       <div id="tooltip" style={{
+        position: 'absolute',
+        backgroundColor: 'rgba(0,0,0,0.8)',
+        color: '#fff',
+        padding: '6px 12px',
+        borderRadius: '6px',
+        display: 'none',
+        pointerEvents: 'none',
+        transform: 'translate(-50%, -100%)',
+        whiteSpace: 'nowrap'
+      }} />
+    </>
+  );
 };
 
 export default PanoramaViewer;
